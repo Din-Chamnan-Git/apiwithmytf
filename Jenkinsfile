@@ -3,7 +3,6 @@ pipeline {
 
 	environment {
 		APP_NAME = 'spring-boot-api'
-		ANSIBLE_INVENTORY = credentials('ansible-inventory-ini')
 		BOT_TOKEN = credentials('TELEGRAM_BOT_TOKEN')
 		CHAT_ID = credentials('TELEGRAM_CHAT_ID')
 		ENVIRONMENT = 'dev'
@@ -68,7 +67,6 @@ pipeline {
 
 					# Run Ansible deployment playbook
 					ansible-playbook /home/nan/infra/terraform_with_hetzner/ansible/playbooks/deploy-jenkins-app.yml \
-						-i ${ANSIBLE_INVENTORY} \
 						-e "git_commit_sha=${GIT_COMMIT}" \
 						-e "git_branch_name=${GIT_BRANCH}" \
 						-e "git_author_name=${GIT_AUTHOR}" \
