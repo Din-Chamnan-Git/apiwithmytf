@@ -82,7 +82,7 @@ pipeline {
 	post {
 		success {
 			script {
-				node {
+				node('any') {
 					sh '''
 						curl -s -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage \
 						-d chat_id=${CHAT_ID} \
@@ -107,7 +107,7 @@ URL: ${BUILD_URL}"
 
 		failure {
 			script {
-				node {
+				node('any') {
 					sh '''
 						curl -s -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage \
 						-d chat_id=${CHAT_ID} \
@@ -130,7 +130,7 @@ Logs: ${BUILD_URL}console"
 
 		always {
 			echo '🧹 Cleaning up Docker artifacts...'
-			node {
+			node('any') {
 				sh 'docker system prune -f || true'
 				cleanWs()
 			}
