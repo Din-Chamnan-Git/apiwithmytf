@@ -5,6 +5,9 @@ pipeline {
 		IMAGE_NAME = 'api'
 		IMAGE_TAG = "${env.BUILD_NUMBER}"
 		API_PORT = '8081'  // ← API runs on 8081
+
+		BOT_TOKEN = credentials('TELEGRAM_BOT_TOKEN')
+		CHAT_ID  = credentials('TELEGRAM_CHAT_ID')
 	}
 
 	stages {
@@ -96,17 +99,41 @@ pipeline {
 
 	post {
 		success {
-			echo "✅ Pipeline completed successfully!"
-			echo "🌐 Access your API at: http://localhost:${API_PORT}"
+			script {
+				sh """
+            curl -s -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage \
+            -d chat_id=${CHAT_ID} \
+            -d parse_mode=Markdown \
+            -d text="✅ *DEPLOY SUCCESS* 🚀
+				App: ${IMAGE_NAME}
+				Build: #${BUILD_NUMBER}
+				Image: ${IMAGE_NAME}:${IMAGE_TAG}
+				Port: ${API_PORT}
+				Health: http://localhost:${API_PORT}/actuator/health
+				Job: ${JOB_NAME}
+				URL: ${BUILD_URL}"
+							"""
+			}
 		}
 		failure {
 			script {
-				echo "❌ Deployment failed!"
-				sh '''
-                    docker ps
-                    docker logs api --tail 50 2>/dev/null || true
-                '''
-			}
-		}
+				sh """
+            curl -s -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage \
+            -d chat_id=${CHAT_ID} \
+            -d parse_mode=Markdown \
+            -d text="❌ *DEPLOY FAILED* 🔥
+				App: ${IMAGE_NAME}
+				Build: #${BUILD_NUMBER}
+				Job: ${JOB_NAME}
+				Logs: ${BUILD_URL}console"
+							"""
+						}
+
+						sh '''
+						docker ps
+						docker logs api --tail 50 2>/dev/null || true
+					'''
+					}
+				}
+
 	}
-}
