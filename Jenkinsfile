@@ -1,13 +1,10 @@
-// Jenkinsfile in repo-app
+// Jenkinsfile - Fixed version
 pipeline {
 	agent any
 
 	environment {
 		IMAGE_NAME = 'api'
 		IMAGE_TAG = "${env.BUILD_NUMBER}"
-		JAVA_HOME = tool name: 'JDK17', type: 'jdk'
-		MAVEN_HOME = tool name: 'Maven', type: 'maven'
-		PATH = "${MAVEN_HOME}/bin:${JAVA_HOME}/bin:${env.PATH}"
 	}
 
 	stages {
@@ -18,17 +15,16 @@ pipeline {
 			}
 		}
 
-		stage('Test') {
+		stage('Test with Maven Docker') {
 			steps {
 				sh '''
-                    echo "Running tests..."
-                    mvn clean test
+                    echo "Running tests with Maven..."
+                    docker run --rm \
+                        -v "$PWD":/app \
+                        -w /app \
+                        maven:3.9-eclipse-temurin-17 \
+                        mvn clean test
                 '''
-			}
-			post {
-				always {
-					junit '**/target/surefire-reports/*.xml'
-				}
 			}
 		}
 
@@ -46,16 +42,16 @@ pipeline {
 			steps {
 				sh """
                     echo "Deploying API..."
-                    
+
                     # Set image tag for docker-compose
                     export IMAGE_TAG=${IMAGE_TAG}
-                    
+
                     # Stop old containers
                     docker-compose down || true
-                    
+
                     # Start new containers
                     docker-compose up -d
-                    
+
                     echo "Waiting for API to be ready..."
                     sleep 15
                 """
@@ -81,7 +77,6 @@ pipeline {
 			steps {
 				sh '''
                     echo "Cleaning up old images..."
-                    # Keep only last 3 images
                     docker images ${IMAGE_NAME} --format "{{.ID}} {{.Tag}}" | \
                     grep -v "latest" | tail -n +4 | awk '{print $1}' | \
                     xargs -r docker rmi || true
@@ -92,20 +87,22 @@ pipeline {
 
 	post {
 		success {
-			echo """
-            ✅ Deployment Successful!
-            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            Image: ${IMAGE_NAME}:${IMAGE_TAG}
-            API URL: http://localhost:8080
-            Health: http://localhost:8080/actuator/health
-            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            """
+			script {
+				sh """
+                    echo "✅ Deployment Successful!"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "Image: ${IMAGE_NAME}:${IMAGE_TAG}"
+                    echo "API URL: http://localhost:8080"
+                    echo "Health: http://localhost:8080/actuator/health"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    docker ps
+                """
+			}
 		}
 		failure {
-			echo "❌ Deployment failed! Check logs above."
-		}
-		always {
-			sh 'docker ps'
+			script {
+				echo "❌ Deployment failed! Check logs above."
+			}
 		}
 	}
 }
