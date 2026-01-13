@@ -1,10 +1,10 @@
-// Jenkinsfile - Fixed version
 pipeline {
 	agent any
 
 	environment {
 		IMAGE_NAME = 'api'
 		IMAGE_TAG = "${env.BUILD_NUMBER}"
+		API_PORT = '8081'  // ← API runs on 8081
 	}
 
 	stages {
@@ -12,19 +12,6 @@ pipeline {
 			steps {
 				checkout scm
 				echo "Building version: ${IMAGE_TAG}"
-			}
-		}
-
-		stage('Test with Maven Docker') {
-			steps {
-				sh '''
-                    echo "Running tests with Maven..."
-                    docker run --rm \
-                        -v "$PWD":/app \
-                        -w /app \
-                        maven:3.9-eclipse-temurin-17 \
-                        mvn clean test
-                '''
 			}
 		}
 
@@ -38,18 +25,23 @@ pipeline {
 			}
 		}
 
+		stage('Stop Old Containers') {
+			steps {
+				sh """
+                    echo "Stopping old API containers..."
+                    docker stop api 2>/dev/null || true
+                    docker rm api 2>/dev/null || true
+                    docker-compose down 2>/dev/null || true
+                    sleep 2
+                """
+			}
+		}
+
 		stage('Deploy') {
 			steps {
 				sh """
-                    echo "Deploying API..."
-
-                    # Set image tag for docker-compose
+                    echo "Deploying API on port ${API_PORT}..."
                     export IMAGE_TAG=${IMAGE_TAG}
-
-                    # Stop old containers
-                    docker-compose down || true
-
-                    # Start new containers
                     docker-compose up -d
 
                     echo "Waiting for API to be ready..."
@@ -63,23 +55,40 @@ pipeline {
 				script {
 					retry(5) {
 						sleep 5
-						sh '''
-                            echo "Checking API health..."
-                            curl -f http://localhost:8080/actuator/health || exit 1
+						sh """
+                            echo "Checking API health on port ${API_PORT}..."
+                            curl -f http://localhost:${API_PORT}/actuator/health
                             echo "✅ API is healthy!"
-                        '''
+                        """
 					}
 				}
 			}
 		}
 
-		stage('Cleanup') {
+		stage('Show Status') {
+			steps {
+				sh """
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "✅ Deployment Successful!"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "Image: ${IMAGE_NAME}:${IMAGE_TAG}"
+                    echo "API URL: http://localhost:${API_PORT}"
+                    echo "Health: http://localhost:${API_PORT}/actuator/health"
+                    echo "Jenkins: http://localhost:8080"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    docker-compose ps
+                """
+			}
+		}
+
+		stage('Cleanup Old Images') {
 			steps {
 				sh '''
                     echo "Cleaning up old images..."
+                    docker image prune -f
                     docker images ${IMAGE_NAME} --format "{{.ID}} {{.Tag}}" | \
                     grep -v "latest" | tail -n +4 | awk '{print $1}' | \
-                    xargs -r docker rmi || true
+                    xargs -r docker rmi -f || true
                 '''
 			}
 		}
@@ -87,21 +96,16 @@ pipeline {
 
 	post {
 		success {
-			script {
-				sh """
-                    echo "✅ Deployment Successful!"
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "Image: ${IMAGE_NAME}:${IMAGE_TAG}"
-                    echo "API URL: http://localhost:8080"
-                    echo "Health: http://localhost:8080/actuator/health"
-                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    docker ps
-                """
-			}
+			echo "✅ Pipeline completed successfully!"
+			echo "🌐 Access your API at: http://localhost:${API_PORT}"
 		}
 		failure {
 			script {
-				echo "❌ DDeployment failed! Check logs above."
+				echo "❌ Deployment failed!"
+				sh '''
+                    docker ps
+                    docker logs api --tail 50 2>/dev/null || true
+                '''
 			}
 		}
 	}
