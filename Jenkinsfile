@@ -64,9 +64,10 @@ pipeline {
 					# Set ANSIBLE_PASSWORD environment variable for SSH authentication
 					export ANSIBLE_PASSWORD="root"
 
-					# Run Ansible deployment playbook
+					# Run Ansible deployment playbook with -k flag for password authentication
 					ansible-playbook deploy-app.yml \
 						-i hosts \
+						-k \
 						-e "app_source_dir=$(pwd)" \
 						-e "git_commit_sha=${GIT_COMMIT}" \
 						-e "git_branch_name=${GIT_BRANCH}" \
