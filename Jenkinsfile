@@ -82,11 +82,12 @@ pipeline {
 	post {
 		success {
 			script {
-				sh '''
-					curl -s -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage \
-					-d chat_id=${CHAT_ID} \
-					-d parse_mode=Markdown \
-					-d text="✅ *Java App Build & Deploy SUCCESS* 🚀
+				node {
+					sh '''
+						curl -s -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage \
+						-d chat_id=${CHAT_ID} \
+						-d parse_mode=Markdown \
+						-d text="✅ *Java App Build & Deploy SUCCESS* 🚀
 App: ${APP_NAME}
 Job: ${JOB_NAME}
 Build: #${BUILD_NUMBER}
@@ -98,18 +99,20 @@ Time: ${GIT_TIME}
 Environment: ${ENVIRONMENT}
 Status: Application deployed and running
 URL: ${BUILD_URL}"
-				'''
-				echo '✅ Telegram notification sent!'
+					'''
+				}
 			}
+			echo '✅ Telegram notification sent!'
 		}
 
 		failure {
 			script {
-				sh '''
-					curl -s -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage \
-					-d chat_id=${CHAT_ID} \
-					-d parse_mode=Markdown \
-					-d text="❌ *Java App Build FAILED* 🔥
+				node {
+					sh '''
+						curl -s -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage \
+						-d chat_id=${CHAT_ID} \
+						-d parse_mode=Markdown \
+						-d text="❌ *Java App Build FAILED* 🔥
 App: ${APP_NAME}
 Job: ${JOB_NAME}
 Build: #${BUILD_NUMBER}
@@ -119,15 +122,18 @@ Author: ${GIT_AUTHOR}
 Message: ${GIT_MESSAGE}
 Time: ${GIT_TIME}
 Logs: ${BUILD_URL}console"
-				'''
-				echo '❌ Telegram failure notification sent!'
+					'''
+				}
 			}
+			echo '❌ Telegram failure notification sent!'
 		}
 
 		always {
 			echo '🧹 Cleaning up Docker artifacts...'
-			sh 'docker system prune -f || true'
-			cleanWs()
+			node {
+				sh 'docker system prune -f || true'
+				cleanWs()
+			}
 		}
 	}
 }
