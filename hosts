@@ -1,7 +1,7 @@
 # Ansible Inventory for Spring Boot API Deployment
 
 [webservers]
-dev-server ansible_host=46.62.230.113 ansible_user=root
+dev-server ansible_host=46.62.230.113 ansible_user=root ansible_ssh_pass=root
 
 [webservers:vars]
 # Application Configuration
@@ -30,5 +30,9 @@ health_check_delay=5
 # Common settings for all hosts
 ansible_connection=ssh
 ansible_python_interpreter=/usr/bin/python3
-ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+# Allow password authentication
+ansible_ssh_pass=root
+ansible_become_method=sudo
+ansible_become_ask_pass=no
 

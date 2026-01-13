@@ -61,7 +61,10 @@ pipeline {
 			steps {
 				echo '🚀 Deploying to server using Ansible...'
 				sh '''
-					# Run Ansible deployment playbook with local inventory
+					# Set ANSIBLE_PASSWORD environment variable for SSH authentication
+					export ANSIBLE_PASSWORD="root"
+
+					# Run Ansible deployment playbook
 					ansible-playbook deploy-app.yml \
 						-i hosts \
 						-e "app_source_dir=$(pwd)" \
