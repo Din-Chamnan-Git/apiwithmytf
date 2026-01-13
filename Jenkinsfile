@@ -3,7 +3,7 @@ pipeline {
 
 	environment {
 		APP_NAME = 'spring-boot-api'
-		ANSIBLE_INVENTORY = credentials('ANSIBLE_INVENTORY')
+		ANSIBLE_INVENTORY = credentials('ansible-inventory-ini')
 		BOT_TOKEN = credentials('TELEGRAM_BOT_TOKEN')
 		CHAT_ID = credentials('TELEGRAM_CHAT_ID')
 		ENVIRONMENT = 'dev'
