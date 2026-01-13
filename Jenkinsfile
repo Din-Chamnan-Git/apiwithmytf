@@ -101,7 +101,7 @@ pipeline {
 		}
 		failure {
 			script {
-				echo "❌ Deployment failed! Check logs above."
+				echo "❌ DDeployment failed! Check logs above."
 			}
 		}
 	}
