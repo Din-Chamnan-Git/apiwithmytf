@@ -1,0 +1,34 @@
+# Ansible Inventory for Spring Boot API Deployment
+
+[webservers]
+dev-server ansible_host=46.62.230.113 ansible_user=root
+
+[webservers:vars]
+# Application Configuration
+app_name=spring-boot-api
+app_port=8080
+app_dir=/opt/spring-boot-api
+app_docker_image=spring-boot-api:latest
+
+# JVM Configuration
+java_opts=-Xmx512m -Xms256m
+
+# Docker Configuration
+docker_network=spring-boot-api-network
+restart_policy=unless-stopped
+
+# Deployment Settings
+deploy_environment=dev
+deploy_method=docker-compose
+
+# Health Check Configuration
+health_check_endpoint=/hello
+health_check_retries=30
+health_check_delay=5
+
+[all:vars]
+# Common settings for all hosts
+ansible_connection=ssh
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+

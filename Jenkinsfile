@@ -61,17 +61,14 @@ pipeline {
 			steps {
 				echo '🚀 Deploying to server using Ansible...'
 				sh '''
-					# Copy application files to Ansible directory
-					mkdir -p /tmp/app-deploy
-					cp -r src pom.xml .mvn Dockerfile docker-compose.yml /tmp/app-deploy/
-
-					# Run Ansible deployment playbook
-					ansible-playbook /home/nan/infra/terraform_with_hetzner/ansible/playbooks/deploy-jenkins-app.yml \
+					# Run Ansible deployment playbook with local inventory
+					ansible-playbook deploy-app.yml \
+						-i hosts \
+						-e "app_source_dir=$(pwd)" \
 						-e "git_commit_sha=${GIT_COMMIT}" \
 						-e "git_branch_name=${GIT_BRANCH}" \
 						-e "git_author_name=${GIT_AUTHOR}" \
-						-e "git_commit_message=${GIT_MESSAGE}" \
-						--extra-vars "app_source_dir=/tmp/app-deploy"
+						-e "git_commit_message=${GIT_MESSAGE}"
 				'''
 			}
 		}
