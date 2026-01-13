@@ -1,129 +1,111 @@
+// Jenkinsfile in repo-app
 pipeline {
 	agent any
 
 	environment {
-		APP_NAME = 'spring-boot-api'
-		BOT_TOKEN = credentials('TELEGRAM_BOT_TOKEN')
-		CHAT_ID = credentials('TELEGRAM_CHAT_ID')
-		ENVIRONMENT = 'dev'
-		APP_DIR = '/opt/spring-boot-api'
+		IMAGE_NAME = 'api'
+		IMAGE_TAG = "${env.BUILD_NUMBER}"
+		JAVA_HOME = tool name: 'JDK17', type: 'jdk'
+		MAVEN_HOME = tool name: 'Maven', type: 'maven'
+		PATH = "${MAVEN_HOME}/bin:${JAVA_HOME}/bin:${env.PATH}"
 	}
 
 	stages {
-		stage('Checkout Code') {
+		stage('Checkout') {
 			steps {
-				echo '📥 Checking out application code...'
 				checkout scm
+				echo "Building version: ${IMAGE_TAG}"
 			}
 		}
 
-		stage('Git Info') {
+		stage('Test') {
 			steps {
-				script {
-					env.GIT_AUTHOR = sh(script: "git log -1 --pretty=%an", returnStdout: true).trim()
-					env.GIT_MESSAGE = sh(script: "git log -1 --pretty=%s", returnStdout: true).trim()
-					env.GIT_TIME = sh(script: "date '+%Y-%m-%d %H:%M:%S'", returnStdout: true).trim()
-					env.GIT_BRANCH = sh(script: "git rev-parse --abbrev-ref HEAD", returnStdout: true).trim()
-					env.GIT_COMMIT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+				sh '''
+                    echo "Running tests..."
+                    mvn clean test
+                '''
+			}
+			post {
+				always {
+					junit '**/target/surefire-reports/*.xml'
 				}
-			}
-		}
-
-		stage('Build with Maven') {
-			steps {
-				echo '🔨 Building Spring Boot application...'
-				sh '''
-					mvn clean package -DskipTests
-				'''
-			}
-		}
-
-		stage('Run Tests') {
-			steps {
-				echo '✅ Running unit tests...'
-				sh '''
-					mvn test
-				'''
 			}
 		}
 
 		stage('Build Docker Image') {
 			steps {
-				echo '🐳 Building Docker image...'
-				sh '''
-					docker build -t ${APP_NAME}:${GIT_COMMIT} .
-					docker tag ${APP_NAME}:${GIT_COMMIT} ${APP_NAME}:latest
-				'''
+				sh """
+                    echo "Building Docker image..."
+                    docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
+                """
 			}
 		}
 
-		stage('Deploy to Server') {
+		stage('Deploy') {
 			steps {
-				echo '🚀 Deploying to server using Ansible...'
-				sh '''
-					# Set ANSIBLE_PASSWORD environment variable for SSH authentication
-					export ANSIBLE_PASSWORD="root"
+				sh """
+                    echo "Deploying API..."
+                    
+                    # Set image tag for docker-compose
+                    export IMAGE_TAG=${IMAGE_TAG}
+                    
+                    # Stop old containers
+                    docker-compose down || true
+                    
+                    # Start new containers
+                    docker-compose up -d
+                    
+                    echo "Waiting for API to be ready..."
+                    sleep 15
+                """
+			}
+		}
 
-					# Run Ansible deployment playbook with -k flag for password authentication
-					ansible-playbook deploy-app.yml \
-						-i hosts \
-						-k \
-						-e "app_source_dir=$(pwd)" \
-						-e "git_commit_sha=${GIT_COMMIT}" \
-						-e "git_branch_name=${GIT_BRANCH}" \
-						-e "git_author_name=${GIT_AUTHOR}" \
-						-e "git_commit_message=${GIT_MESSAGE}"
-				'''
+		stage('Health Check') {
+			steps {
+				script {
+					retry(5) {
+						sleep 5
+						sh '''
+                            echo "Checking API health..."
+                            curl -f http://localhost:8080/actuator/health || exit 1
+                            echo "✅ API is healthy!"
+                        '''
+					}
+				}
+			}
+		}
+
+		stage('Cleanup') {
+			steps {
+				sh '''
+                    echo "Cleaning up old images..."
+                    # Keep only last 3 images
+                    docker images ${IMAGE_NAME} --format "{{.ID}} {{.Tag}}" | \
+                    grep -v "latest" | tail -n +4 | awk '{print $1}' | \
+                    xargs -r docker rmi || true
+                '''
 			}
 		}
 	}
 
 	post {
 		success {
-			echo '✅ Telegram notification sent!'
-			sh '''
-				curl -s -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage \
-				-d chat_id=${CHAT_ID} \
-				-d parse_mode=Markdown \
-				-d text="✅ *Java App Build & Deploy SUCCESS* 🚀
-App: ${APP_NAME}
-Job: ${JOB_NAME}
-Build: #${BUILD_NUMBER}
-Branch: ${GIT_BRANCH}
-Commit: ${GIT_COMMIT}
-Author: ${GIT_AUTHOR}
-Message: ${GIT_MESSAGE}
-Time: ${GIT_TIME}
-Environment: ${ENVIRONMENT}
-Status: Application deployed and running
-URL: ${BUILD_URL}"
-			'''
+			echo """
+            ✅ Deployment Successful!
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            Image: ${IMAGE_NAME}:${IMAGE_TAG}
+            API URL: http://localhost:8080
+            Health: http://localhost:8080/actuator/health
+            ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            """
 		}
-
 		failure {
-			echo '❌ Build failed! Sending notification...'
-			sh '''
-				curl -s -X POST https://api.telegram.org/bot${BOT_TOKEN}/sendMessage \
-				-d chat_id=${CHAT_ID} \
-				-d parse_mode=Markdown \
-				-d text="❌ *Java App Build FAILED* 🔥
-App: ${APP_NAME}
-Job: ${JOB_NAME}
-Build: #${BUILD_NUMBER}
-Branch: ${GIT_BRANCH}
-Commit: ${GIT_COMMIT}
-Author: ${GIT_AUTHOR}
-Message: ${GIT_MESSAGE}
-Time: ${GIT_TIME}
-Logs: ${BUILD_URL}console"
-			'''
+			echo "❌ Deployment failed! Check logs above."
 		}
-
 		always {
-			echo '🧹 Cleaning up Docker artifacts...'
-			sh 'docker system prune -f || true'
-			cleanWs()
+			sh 'docker ps'
 		}
 	}
 }
-
