@@ -146,7 +146,15 @@ pipeline {
                             IMAGE_REPO_LOWER="$(echo "$IMAGE_REPO" | tr '[:upper:]' '[:lower:]')"
                             sed -i "s|image: api:\\${IMAGE_TAG:-latest}|image: ${IMAGE_REPO_LOWER}:\\${IMAGE_TAG:-latest}|g" /tmp/docker-compose.yml
 
-                            cd "infra/$INFRA_ANSIBLE_DIR"
+                            if [ -d "infra/$INFRA_ANSIBLE_DIR" ]; then
+                              ANSIBLE_DIR="infra/$INFRA_ANSIBLE_DIR"
+                            elif [ -d "infra/ansible" ]; then
+                              ANSIBLE_DIR="infra/ansible"
+                            else
+                              echo "ERROR: Ansible directory not found. Checked: infra/$INFRA_ANSIBLE_DIR and infra/ansible"
+                              exit 1
+                            fi
+                            cd "$ANSIBLE_DIR"
                             export GHCR_USER="$GHCR_USERNAME"
                             export GHCR_TOKEN="$GHCR_TOKEN"
                             if command -v ansible-playbook >/dev/null 2>&1; then
