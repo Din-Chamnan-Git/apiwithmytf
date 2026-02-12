@@ -50,6 +50,16 @@ pipeline {
             }
         }
 
+        stage('Precheck Tools') {
+            steps {
+                sh '''
+                    set -e
+                    command -v docker >/dev/null 2>&1 || { echo "ERROR: docker CLI is not installed on this Jenkins agent."; exit 1; }
+                    docker --version
+                '''
+            }
+        }
+
         stage('Build Image') {
             steps {
                 dir("app/${params.APP_PATH}") {
