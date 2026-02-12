@@ -54,10 +54,14 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    command -v ansible-playbook >/dev/null 2>&1 || { echo "ERROR: ansible-playbook is not installed on this Jenkins agent."; exit 1; }
-                    ansible-playbook --version | head -n 1
+                    if command -v ansible-playbook >/dev/null 2>&1; then
+                      ansible-playbook --version | head -n 1
+                    else
+                      echo "ansible-playbook not found on agent; pipeline will bootstrap a local venv in deploy stage."
+                      command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required to bootstrap ansible."; exit 1; }
+                    fi
 
-                    if [ -x "app/$APP_PATH/mvnw" ]; then
+                    if [ -f "app/$APP_PATH/mvnw" ]; then
                       echo "Using Maven Wrapper: app/$APP_PATH/mvnw"
                     elif command -v mvn >/dev/null 2>&1; then
                       mvn --version | head -n 1
@@ -76,7 +80,8 @@ pipeline {
                         sh '''
                             set -e
 
-                            if [ -x "./mvnw" ]; then
+                            if [ -f "./mvnw" ]; then
+                              chmod +x ./mvnw
                               MVN="./mvnw"
                             else
                               MVN="mvn"
@@ -103,7 +108,17 @@ pipeline {
                             sed -i "s|image: api:\\${IMAGE_TAG:-latest}|image: ${IMAGE_REPO}:\\${IMAGE_TAG:-latest}|g" /tmp/docker-compose.yml
 
                             cd "infra/$INFRA_ANSIBLE_DIR"
-                            ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook \
+                            if command -v ansible-playbook >/dev/null 2>&1; then
+                                ANSIBLE_BIN="ansible-playbook"
+                            else
+                                python3 -m venv .ansible-venv
+                                . .ansible-venv/bin/activate
+                                pip install --upgrade pip
+                                pip install "ansible-core>=2.16,<2.18"
+                                ANSIBLE_BIN=".ansible-venv/bin/ansible-playbook"
+                            fi
+
+                            ANSIBLE_HOST_KEY_CHECKING=False "$ANSIBLE_BIN" \
                                 -i "$ANSIBLE_INVENTORY" \
                                 "$ANSIBLE_PLAYBOOK" \
                                 --extra-vars "environment=$ENVIRONMENT version=$IMAGE_TAG image_name=$IMAGE_REPO target_hosts=$TARGET_HOSTS"
