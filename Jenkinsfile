@@ -13,7 +13,7 @@ pipeline {
         string(name: 'GIT_CREDENTIALS_ID', defaultValue: 'deploy-ssh-key', description: 'Jenkins Git SSH credentials ID')
         string(name: 'APP_PATH', defaultValue: 'api', description: 'Path to app Docker context inside app repo')
         string(name: 'INFRA_ANSIBLE_DIR', defaultValue: 'terraform_with_hetzner/ansible', description: 'Path to ansible directory inside infra repo')
-        string(name: 'GHCR_OWNER', defaultValue: 'Din-Chamnan-Git', description: 'GitHub owner/org for GHCR image')
+        string(name: 'GHCR_OWNER', defaultValue: 'din-chamnan-git', description: 'GitHub owner/org for GHCR image')
         string(name: 'GHCR_USERNAME', defaultValue: 'Din-Chamnan-Git', description: 'GitHub username used to authenticate to GHCR')
         string(name: 'IMAGE_NAME', defaultValue: 'api', description: 'Docker image name')
         string(name: 'ENVIRONMENT', defaultValue: 'dev', description: 'Deployment environment')
@@ -110,9 +110,11 @@ pipeline {
                         else
                           MVN="mvn"
                         fi
+                        IMAGE_REPO_LOWER="$(echo "$IMAGE_REPO" | tr '[:upper:]' '[:lower:]')"
+                        IMAGE_FULL_LOWER="$IMAGE_REPO_LOWER:$IMAGE_TAG"
 
                         "$MVN" -B -DskipTests com.google.cloud.tools:jib-maven-plugin:3.4.3:build \
-                          -Djib.to.image="$IMAGE_FULL" \
+                          -Djib.to.image="$IMAGE_FULL_LOWER" \
                           -Djib.to.auth.username="$GHCR_USERNAME" \
                           -Djib.to.auth.password="$GHCR_TOKEN" \
                           -Djib.to.tags=latest
@@ -140,7 +142,8 @@ pipeline {
                             fi
 
                             cp "app/$RESOLVED_APP_PATH/docker-compose.yml" /tmp/docker-compose.yml
-                            sed -i "s|image: api:\\${IMAGE_TAG:-latest}|image: ${IMAGE_REPO}:\\${IMAGE_TAG:-latest}|g" /tmp/docker-compose.yml
+                            IMAGE_REPO_LOWER="$(echo "$IMAGE_REPO" | tr '[:upper:]' '[:lower:]')"
+                            sed -i "s|image: api:\\${IMAGE_TAG:-latest}|image: ${IMAGE_REPO_LOWER}:\\${IMAGE_TAG:-latest}|g" /tmp/docker-compose.yml
 
                             cd "infra/$INFRA_ANSIBLE_DIR"
                             export GHCR_USER="$GHCR_USERNAME"
@@ -158,7 +161,7 @@ pipeline {
                             ANSIBLE_HOST_KEY_CHECKING=False "$ANSIBLE_BIN" \
                                 -i "$ANSIBLE_INVENTORY" \
                                 "$ANSIBLE_PLAYBOOK" \
-                                --extra-vars "environment=$ENVIRONMENT version=$IMAGE_TAG image_name=$IMAGE_REPO target_hosts=$TARGET_HOSTS"
+                                --extra-vars "environment=$ENVIRONMENT version=$IMAGE_TAG image_name=$IMAGE_REPO_LOWER target_hosts=$TARGET_HOSTS"
                         '''
                     }
                 }
