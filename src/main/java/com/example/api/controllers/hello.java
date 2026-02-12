@@ -8,7 +8,7 @@ public class hello {
 
 	@GetMapping("/hello")
 	public String returnHello() {
-		return "Hello from Spring Boot Controller!";
+		return "Hello from Spring Boot Controller!" + " Created by Din Chamnan.";
 	}
 }
 
