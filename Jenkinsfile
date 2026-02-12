@@ -5,7 +5,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 // Pull code from the repo automatically
-                git branch: 'main', url: 'https://github.com/<username>/<repo>.git'
+                git branch: 'main', url: 'git@github.com:Din-Chamnan-Git/apiwithmytf.git'
             }
         }
     }
