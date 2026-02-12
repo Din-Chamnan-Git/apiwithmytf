@@ -27,6 +27,7 @@ pipeline {
         IMAGE_REPO = "${REGISTRY}/${params.GHCR_OWNER}/${params.IMAGE_NAME}"
         IMAGE_FULL = "${IMAGE_REPO}:${IMAGE_TAG}"
         IMAGE_LATEST = "${IMAGE_REPO}:latest"
+        RESOLVED_APP_PATH = ''
     }
 
     stages {
@@ -52,6 +53,25 @@ pipeline {
 
         stage('Precheck Tools') {
             steps {
+                script {
+                    env.RESOLVED_APP_PATH = sh(
+                        script: '''
+                            set -e
+                            if [ -f "app/$APP_PATH/pom.xml" ]; then
+                                echo "$APP_PATH"
+                            elif [ -f "app/pom.xml" ]; then
+                                echo "."
+                            elif [ -f "app/api/pom.xml" ]; then
+                                echo "api"
+                            else
+                                echo "ERROR: Could not find pom.xml in app/$APP_PATH, app/, or app/api/" >&2
+                                exit 1
+                            fi
+                        ''',
+                        returnStdout: true
+                    ).trim()
+                    echo "Resolved app path: ${env.RESOLVED_APP_PATH}"
+                }
                 sh '''
                     set -e
                     if command -v ansible-playbook >/dev/null 2>&1; then
@@ -61,12 +81,12 @@ pipeline {
                       command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required to bootstrap ansible."; exit 1; }
                     fi
 
-                    if [ -f "app/$APP_PATH/mvnw" ]; then
-                      echo "Using Maven Wrapper: app/$APP_PATH/mvnw"
+                    if [ -f "app/$RESOLVED_APP_PATH/mvnw" ]; then
+                      echo "Using Maven Wrapper: app/$RESOLVED_APP_PATH/mvnw"
                     elif command -v mvn >/dev/null 2>&1; then
                       mvn --version | head -n 1
                     else
-                      echo "ERROR: Maven not found (neither app/$APP_PATH/mvnw nor system mvn)."
+                      echo "ERROR: Maven not found (neither app/$RESOLVED_APP_PATH/mvnw nor system mvn)."
                       exit 1
                     fi
                 '''
@@ -76,7 +96,7 @@ pipeline {
         stage('Build And Push Image (Jib)') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'github-pat-global', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
-                    dir("app/${params.APP_PATH}") {
+                    dir("app/${env.RESOLVED_APP_PATH}") {
                         sh '''
                             set -e
 
@@ -104,7 +124,7 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: 'github-pat-global', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
                         sh '''
                             set -e
-                            cp "app/$APP_PATH/docker-compose.yml" /tmp/docker-compose.yml
+                            cp "app/$RESOLVED_APP_PATH/docker-compose.yml" /tmp/docker-compose.yml
                             sed -i "s|image: api:\\${IMAGE_TAG:-latest}|image: ${IMAGE_REPO}:\\${IMAGE_TAG:-latest}|g" /tmp/docker-compose.yml
 
                             cd "infra/$INFRA_ANSIBLE_DIR"
