@@ -113,7 +113,7 @@ pipeline {
                         IMAGE_REPO_LOWER="$(echo "$IMAGE_REPO" | tr '[:upper:]' '[:lower:]')"
                         IMAGE_FULL_LOWER="$IMAGE_REPO_LOWER:$IMAGE_TAG"
 
-                        "$MVN" -B -DskipTests com.google.cloud.tools:jib-maven-plugin:3.4.3:build \
+                        "$MVN" -B -DskipTests clean compile com.google.cloud.tools:jib-maven-plugin:3.4.3:build \
                           -Djib.to.image="$IMAGE_FULL_LOWER" \
                           -Djib.to.auth.username="$GHCR_USERNAME" \
                           -Djib.to.auth.password="$GHCR_TOKEN" \
