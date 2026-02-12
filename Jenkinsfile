@@ -11,6 +11,7 @@ pipeline {
         string(name: 'INFRA_REPO_URL', defaultValue: 'git@github.com:Din-Chamnan-Git/mytf.git', description: 'Git URL for terraform/ansible repository')
         string(name: 'INFRA_REPO_BRANCH', defaultValue: 'main', description: 'Infra repository branch')
         string(name: 'GIT_CREDENTIALS_ID', defaultValue: 'deploy-ssh-key', description: 'Jenkins Git SSH credentials ID')
+        string(name: 'APP_SERVER_SSH_CREDENTIAL_ID', defaultValue: 'app-server-ssh', description: 'Jenkins SSH credential ID for app server access')
         string(name: 'APP_PATH', defaultValue: 'api', description: 'Path to app Docker context inside app repo')
         string(name: 'INFRA_ANSIBLE_DIR', defaultValue: 'terraform_with_hetzner/ansible', description: 'Path to ansible directory inside infra repo')
         string(name: 'GHCR_OWNER', defaultValue: 'din-chamnan-git', description: 'GitHub owner/org for GHCR image')
@@ -125,7 +126,7 @@ pipeline {
 
         stage('Deploy With Ansible') {
             steps {
-                sshagent(credentials: ['app-server-ssh']) {
+                sshagent(credentials: ["${params.APP_SERVER_SSH_CREDENTIAL_ID}"]) {
                     withCredentials([string(credentialsId: 'github-pat-global', variable: 'GHCR_TOKEN')]) {
                         sh '''
                             set -e
