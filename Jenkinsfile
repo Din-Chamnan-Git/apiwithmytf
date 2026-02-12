@@ -54,33 +54,41 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    command -v docker >/dev/null 2>&1 || { echo "ERROR: docker CLI is not installed on this Jenkins agent."; exit 1; }
-                    docker --version
+                    command -v ansible-playbook >/dev/null 2>&1 || { echo "ERROR: ansible-playbook is not installed on this Jenkins agent."; exit 1; }
+                    ansible-playbook --version | head -n 1
+
+                    if [ -x "app/$APP_PATH/mvnw" ]; then
+                      echo "Using Maven Wrapper: app/$APP_PATH/mvnw"
+                    elif command -v mvn >/dev/null 2>&1; then
+                      mvn --version | head -n 1
+                    else
+                      echo "ERROR: Maven not found (neither app/$APP_PATH/mvnw nor system mvn)."
+                      exit 1
+                    fi
                 '''
             }
         }
 
-        stage('Build Image') {
-            steps {
-                dir("app/${params.APP_PATH}") {
-                    sh '''
-                        set -e
-                        docker build -t "$IMAGE_FULL" -t "$IMAGE_LATEST" .
-                    '''
-                }
-            }
-        }
-
-        stage('Push To GHCR') {
+        stage('Build And Push Image (Jib)') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'github-pat-global', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
-                    sh '''
-                        set -e
-                        echo "$GHCR_TOKEN" | docker login "$REGISTRY" -u "$GHCR_USER" --password-stdin
-                        docker push "$IMAGE_FULL"
-                        docker push "$IMAGE_LATEST"
-                        docker logout "$REGISTRY"
-                    '''
+                    dir("app/${params.APP_PATH}") {
+                        sh '''
+                            set -e
+
+                            if [ -x "./mvnw" ]; then
+                              MVN="./mvnw"
+                            else
+                              MVN="mvn"
+                            fi
+
+                            "$MVN" -B -DskipTests com.google.cloud.tools:jib-maven-plugin:3.4.3:build \
+                              -Djib.to.image="$IMAGE_FULL" \
+                              -Djib.to.auth.username="$GHCR_USER" \
+                              -Djib.to.auth.password="$GHCR_TOKEN" \
+                              -Djib.to.tags=latest
+                        '''
+                    }
                 }
             }
         }
