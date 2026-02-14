@@ -146,7 +146,6 @@ pipeline {
                             cp "app/$RESOLVED_APP_PATH/docker-compose.yml" /tmp/docker-compose.yml
                             IMAGE_REPO_LOWER="$(echo "$IMAGE_REPO" | tr '[:upper:]' '[:lower:]')"
                             sed -i "s|image: api:\\${IMAGE_TAG:-latest}|image: ${IMAGE_REPO_LOWER}:\\${IMAGE_TAG:-latest}|g" /tmp/docker-compose.yml
-                            cp "app/$RESOLVED_APP_PATH/nginx.conf" /tmp/nginx.conf
 
                             ACTIVE_COLOR="${DEPLOY_COLOR:-blue}"
                             if [ "$ACTIVE_COLOR" = "blue" ]; then
@@ -154,7 +153,10 @@ pipeline {
                             else
                               INACTIVE_COLOR="blue"
                             fi
-                            sed -i "/server ${INACTIVE_COLOR}-app:8080;/d" /tmp/nginx.conf
+
+                            mkdir -p /tmp/ansible-deploy
+                            cp "app/$RESOLVED_APP_PATH/nginx.conf" "/tmp/ansible-deploy/nginx.conf"
+                            sed -i "/server ${INACTIVE_COLOR}-app:8080;/d" "/tmp/ansible-deploy/nginx.conf"
 
                             if [ -d "infra/$INFRA_ANSIBLE_DIR" ]; then
                               ANSIBLE_DIR="infra/$INFRA_ANSIBLE_DIR"
@@ -180,7 +182,7 @@ pipeline {
                             ANSIBLE_HOST_KEY_CHECKING=False "$ANSIBLE_BIN" \
                                 -i "$ANSIBLE_INVENTORY" \
                                 "$ANSIBLE_PLAYBOOK" \
-                                --extra-vars "environment=$ENVIRONMENT version=$IMAGE_TAG image_name=$IMAGE_REPO_LOWER target_hosts=$TARGET_HOSTS active_color=$ACTIVE_COLOR"
+                                --extra-vars "environment=$ENVIRONMENT version=$IMAGE_TAG image_name=$IMAGE_REPO_LOWER target_hosts=$TARGET_HOSTS active_color=$ACTIVE_COLOR app_repo_path=/tmp/ansible-deploy"
                         '''
                     }
                 }
