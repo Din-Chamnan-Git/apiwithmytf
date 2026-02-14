@@ -21,6 +21,7 @@ pipeline {
         string(name: 'ANSIBLE_INVENTORY', defaultValue: 'inventories/dev/inventory.ini', description: 'Ansible inventory path')
         string(name: 'ANSIBLE_PLAYBOOK', defaultValue: 'playbooks/deploy-app.yml', description: 'Ansible playbook path')
         string(name: 'TARGET_HOSTS', defaultValue: 'webservers', description: 'Ansible target hosts/group')
+        choice(name: 'DEPLOY_COLOR', choices: ['blue', 'green'], description: 'Active color to receive traffic')
     }
 
     environment {
@@ -145,6 +146,15 @@ pipeline {
                             cp "app/$RESOLVED_APP_PATH/docker-compose.yml" /tmp/docker-compose.yml
                             IMAGE_REPO_LOWER="$(echo "$IMAGE_REPO" | tr '[:upper:]' '[:lower:]')"
                             sed -i "s|image: api:\\${IMAGE_TAG:-latest}|image: ${IMAGE_REPO_LOWER}:\\${IMAGE_TAG:-latest}|g" /tmp/docker-compose.yml
+                            cp "app/$RESOLVED_APP_PATH/nginx.conf" /tmp/nginx.conf
+
+                            ACTIVE_COLOR="${DEPLOY_COLOR:-blue}"
+                            if [ "$ACTIVE_COLOR" = "blue" ]; then
+                              INACTIVE_COLOR="green"
+                            else
+                              INACTIVE_COLOR="blue"
+                            fi
+                            sed -i "/server ${INACTIVE_COLOR}-app:8080;/d" /tmp/nginx.conf
 
                             if [ -d "infra/$INFRA_ANSIBLE_DIR" ]; then
                               ANSIBLE_DIR="infra/$INFRA_ANSIBLE_DIR"
@@ -170,7 +180,7 @@ pipeline {
                             ANSIBLE_HOST_KEY_CHECKING=False "$ANSIBLE_BIN" \
                                 -i "$ANSIBLE_INVENTORY" \
                                 "$ANSIBLE_PLAYBOOK" \
-                                --extra-vars "environment=$ENVIRONMENT version=$IMAGE_TAG image_name=$IMAGE_REPO_LOWER target_hosts=$TARGET_HOSTS"
+                                --extra-vars "environment=$ENVIRONMENT version=$IMAGE_TAG image_name=$IMAGE_REPO_LOWER target_hosts=$TARGET_HOSTS active_color=$ACTIVE_COLOR"
                         '''
                     }
                 }
