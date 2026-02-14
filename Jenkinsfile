@@ -21,6 +21,7 @@ pipeline {
         string(name: 'ANSIBLE_INVENTORY', defaultValue: 'inventories/dev/inventory.ini', description: 'Ansible inventory path')
         string(name: 'ANSIBLE_PLAYBOOK', defaultValue: 'playbooks/deploy-app.yml', description: 'Ansible playbook path')
         string(name: 'TARGET_HOSTS', defaultValue: 'webservers', description: 'Ansible target hosts/group')
+        choice(name: 'DEPLOY_COLOR', choices: ['blue', 'green'], description: 'Which color should receive traffic')
     }
 
     environment {
@@ -146,6 +147,22 @@ pipeline {
                             IMAGE_REPO_LOWER="$(echo "$IMAGE_REPO" | tr '[:upper:]' '[:lower:]')"
                             sed -i "s|image: api:\\${IMAGE_TAG:-latest}|image: ${IMAGE_REPO_LOWER}:\\${IMAGE_TAG:-latest}|g" /tmp/docker-compose.yml
 
+                            if [ -f "app/$RESOLVED_APP_PATH/nginx.conf" ]; then
+                              cp "app/$RESOLVED_APP_PATH/nginx.conf" /tmp/nginx.conf
+                            else
+                              echo "ERROR: Could not find nginx.conf in app/$RESOLVED_APP_PATH/"
+                              exit 1
+                            fi
+
+                            ACTIVE_COLOR="${DEPLOY_COLOR:-blue}"
+                            if [ "$ACTIVE_COLOR" = "blue" ]; then
+                              INACTIVE_COLOR="green"
+                            else
+                              INACTIVE_COLOR="blue"
+                            fi
+                            # Keep only the active upstream server for true blue/green switching.
+                            sed -i "/server ${INACTIVE_COLOR}-app:8080;/d" /tmp/nginx.conf
+
                             if [ -d "infra/$INFRA_ANSIBLE_DIR" ]; then
                               ANSIBLE_DIR="infra/$INFRA_ANSIBLE_DIR"
                             elif [ -d "infra/ansible" ]; then
@@ -170,7 +187,7 @@ pipeline {
                             ANSIBLE_HOST_KEY_CHECKING=False "$ANSIBLE_BIN" \
                                 -i "$ANSIBLE_INVENTORY" \
                                 "$ANSIBLE_PLAYBOOK" \
-                                --extra-vars "environment=$ENVIRONMENT version=$IMAGE_TAG image_name=$IMAGE_REPO_LOWER target_hosts=$TARGET_HOSTS"
+                                --extra-vars "deploy_env=$ENVIRONMENT version=$IMAGE_TAG image_name=$IMAGE_REPO_LOWER target_hosts=$TARGET_HOSTS active_color=$ACTIVE_COLOR"
                         '''
                     }
                 }
